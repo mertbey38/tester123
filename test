@@ -1,1 +1,45 @@
-test
+import argparse
+import os
+
+def main():
+    parser = argparse.ArgumentParser(description="Automated website security scanner")
+    parser.add_argument("-f", "--file", help="Path to text file containing domains to scan")
+    parser.add_argument("-s", "--scan", help="Perform subdomain scan (sub), sensitive data search (sen), or both (all)", choices=["sub", "sen", "all"])
+    parser.add_argument("-d", "--dns", help="Perform DNS subdomain enumeration using massdns", action="store_true")
+    args = parser.parse_args()
+
+    file_path = args.file
+    scan_type = args.scan
+    use_dns = args.dns
+
+    if file_path is None:
+        print("Please specify a text file containing domains to scan using the -f or --file flag")
+        sys.exit()
+
+    with open(file_path, "r") as file:
+        domains = file.readlines()
+
+    for domain in domains:
+        domain = domain.strip()
+
+        if use_dns:
+            os.system("python massdns.py -r resolvers.txt -o S -w {}.txt {}".format(domain, domain))
+            with open("{}.txt".format(domain), "r") as subdomains_file:
+                subdomains = subdomains_file.readlines()
+                for subdomain in subdomains:
+                    subdomain = subdomain.strip()
+                    if subdomain.endswith(domain):
+                        print(subdomain)
+
+        if scan_type == "sub" or scan_type == "all":
+            subdomain_scan(domain)
+
+        if scan_type == "sen" or scan_type == "all":
+            search_sensitive_data(domain)
+
+        os.system("python GitRob.py -d {}".format(domain))
+        os.system("python trufflehog.py {}".format(domain))
+        os.system("python gitleaks.py --url {}".format(domain))
+        os.system("knockpy {}".format(domain))
+        os.system("python sublist3r.py -d {} -v -o {}.txt".format(domain, domain))
+        os.system("python subbrute.py {} -o {}.txt".format(domain, domain))
